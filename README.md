@@ -13,7 +13,6 @@ Con muuucha (vaquita) fe
   "cadena_entrada": "id * id + id",
   "tipo_parser": "LR1" 
 }
-
 ```
 
 *(Nota: `tipo_parser` puede ser `"LL1"`, `"LR0"`, `"SLR1"`, `"LALR1"` o `"LR1"` para que el backend sepa a qué función o "silo" enviarlo).*
@@ -46,21 +45,73 @@ class Gramatica:
             'F': [['(', 'E', ')'], ['id']]
         }
         
-        # 4. (Opcional pero útil) Producciones numeradas para los parsers LR (Shift/Reduce)
+        # 4. Producciones numeradas para parsers LR
         self.producciones_numeradas = [
-            (0, 'E\'', ['E']),         # Producción aumentada (necesaria para LR)
+            (0, 'E\'', ['E']),
             (1, 'E', ['E', '+', 'T']),
             (2, 'E', ['T']),
-            # ... etc
         ]
+```
+### 3. Construcción Intermedia: AFN Clausura / Colección Canónica LR
 
+Antes de construir la tabla LR, el backend también debe generar la colección de conjuntos de items (clausuras), ya que esta estructura funciona como el AFN/DFA intermedio utilizado por los parsers LR (`LR0`, `SLR1`, `LALR1` y `LR1`).
+
+Esto permitirá que el frontend pueda visualizar los estados, transiciones y conflictos del parser.
+
+#### Formato JSON sugerido para el AFN Clausura
+
+```json
+{
+  "afn_clausura": {
+    "tipo": "LR1",
+
+    "estados": [
+      {
+        "estado": "I0",
+
+        "items": [
+          "E' -> • E , $",
+          "E -> • E + T , $",
+          "E -> • T , $",
+          "T -> • T * F , $/+",
+          "T -> • F , $/+",
+          "F -> • ( E ) , $/+/*",
+          "F -> • id , $/+/*"
+        ],
+
+        "transiciones": {
+          "E": "I1",
+          "T": "I2",
+          "F": "I3",
+          "(": "I4",
+          "id": "I5"
+        }
+      },
+
+      {
+        "estado": "I1",
+
+        "items": [
+          "E' -> E • , $",
+          "E -> E • + T , $"
+        ],
+
+        "transiciones": {
+          "+": "I6"
+        }
+      }
+    ]
+  }
+}
 ```
 
+#### Consideraciones
 
----
-
-### 3. El Output (El Contrato JSON que devuelve el Backend)
-
+- En `LR(0)` los items no llevan lookahead.
+- En `SLR(1)` las reducciones usan FOLLOW.
+- En `LR(1)` cada item contiene su lookahead.
+- En `LALR(1)` se pueden fusionar estados con el mismo núcleo LR(0).
+### 4. El Output (El Contrato JSON que devuelve el Backend)
 
 **Ojo con la tabla:** Como las tablas LL(1) y LR(1) son diferentes (LL1 tiene No Terminales en las filas; LR1 tiene Números de Estado), la mejor forma de que el Frontend no colapse es mandar la tabla ya "dibujable".
 
@@ -68,6 +119,24 @@ class Gramatica:
 {
   "cadena_valida": true,
   "mensaje": "La cadena fue aceptada exitosamente.",
+
+  "afn_clausura": {
+    "tipo": "LR1",
+    "estados": [
+      {
+        "estado": "I0",
+        "items": [
+          "E' -> • E , $",
+          "E -> • E + T , $"
+        ],
+        "transiciones": {
+          "E": "I1",
+          "id": "I5"
+        }
+      },
+      // ... resto de estados
+    ]
+  },
   
   "construccion_tablas": {
     "tipo": "LR", 
@@ -85,8 +154,8 @@ class Gramatica:
         "Estado": "1",
         "+": "S6",
         "$": "ACC"
-      }
-      // ... resto de estados
+      },
+      // ... resto de tablas
     ]
   },
   
@@ -108,9 +177,8 @@ class Gramatica:
       "pila": "0 F 3",
       "entrada": "* id + id $",
       "accion": "Reducir (Reduce) por T -> F"
-    }
+    },
     // ... hasta llegar a Aceptar (ACC) o Error
   ]
 }
-
 ```
