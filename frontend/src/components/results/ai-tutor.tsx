@@ -1,5 +1,6 @@
 "use client";
 
+import { createElement, type ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AnalysisRequest, BackendResult } from "@/lib/backend";
 import { askGroqTutor, type GroqTutorMessage } from "@/app/groq-actions";
@@ -29,6 +30,232 @@ function buildInitialMessage() {
 
 function isAnalysisResultAvailable(result: BackendResult | null): result is Exclude<BackendResult, { error: string }> {
     return Boolean(result && typeof result === "object" && !("error" in result));
+}
+
+function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
+    const nodes: ReactNode[] = [];
+    let cursor = 0;
+    let keyIndex = 0;
+
+    const pushText = (value: string) => {
+        if (value) {
+            nodes.push(value);
+        }
+    };
+
+    const pushInline = (value: string, kind: "strong" | "em" | "code" | "link", href?: string) => {
+        if (!value) {
+            return;
+        }
+
+        const inner = kind === "link" ? value : renderInlineMarkdown(value, `${keyPrefix}-${keyIndex}-inner`);
+
+        if (kind === "strong") {
+            nodes.push(
+                <strong key={`${keyPrefix}-${keyIndex++}`} className="font-semibold text-inherit">
+                    {inner}
+                </strong>,
+            );
+            return;
+        }
+
+        if (kind === "em") {
+            nodes.push(
+                <em key={`${keyPrefix}-${keyIndex++}`} className="italic text-inherit">
+                    {inner}
+                </em>,
+            );
+            return;
+        }
+
+        if (kind === "code") {
+            nodes.push(
+                <code key={`${keyPrefix}-${keyIndex++}`} className="rounded bg-black/5 px-1 py-0.5 font-mono text-[0.95em] text-inherit">
+                    {value}
+                </code>,
+            );
+            return;
+        }
+
+        nodes.push(
+            <a
+                key={`${keyPrefix}-${keyIndex++}`}
+                href={href}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-(--accent) underline decoration-dotted underline-offset-2"
+            >
+                {inner}
+            </a>,
+        );
+    };
+
+    while (cursor < text.length) {
+        const remaining = text.slice(cursor);
+        const linkMatch = remaining.match(/^\[([^\]]+)\]\(([^)]+)\)/);
+        const strongMatch = remaining.match(/^\*\*([^*]+(?:\*[^*]+\*[^*]*)*)\*\*/);
+        const emMatch = remaining.match(/^\*([^*\n]+)\*/);
+        const codeMatch = remaining.match(/^`([^`]+)`/);
+
+        if (linkMatch) {
+            pushInline(linkMatch[1], "link", linkMatch[2]);
+            cursor += linkMatch[0].length;
+            continue;
+        }
+
+        if (strongMatch) {
+            pushInline(strongMatch[1], "strong");
+            cursor += strongMatch[0].length;
+            continue;
+        }
+
+        if (emMatch) {
+            pushInline(emMatch[1], "em");
+            cursor += emMatch[0].length;
+            continue;
+        }
+
+        if (codeMatch) {
+            pushInline(codeMatch[1], "code");
+            cursor += codeMatch[0].length;
+            continue;
+        }
+
+        const nextSpecials = [remaining.indexOf("["), remaining.indexOf("*"), remaining.indexOf("`")].filter((index) => index >= 0);
+        const nextSpecial = nextSpecials.length ? Math.min(...nextSpecials) : -1;
+        const chunk = nextSpecial >= 0 ? remaining.slice(0, nextSpecial) : remaining;
+
+        pushText(chunk);
+        cursor += chunk.length || 1;
+    }
+
+    return nodes;
+}
+
+function renderMarkdown(content: string): ReactNode[] {
+    const lines = content.replace(/\r\n/g, "\n").split("\n");
+    const nodes: ReactNode[] = [];
+    let lineIndex = 0;
+    let blockIndex = 0;
+    const headingTagMap = {
+        1: "h1",
+        2: "h2",
+        3: "h3",
+        4: "h4",
+        5: "h5",
+        6: "h6",
+    } as const;
+
+    while (lineIndex < lines.length) {
+        const line = lines[lineIndex];
+
+        if (!line.trim()) {
+            lineIndex += 1;
+            continue;
+        }
+
+        if (line.startsWith("```")) {
+            const codeLines: string[] = [];
+            lineIndex += 1;
+
+            while (lineIndex < lines.length && !lines[lineIndex].startsWith("```")) {
+                codeLines.push(lines[lineIndex]);
+                lineIndex += 1;
+            }
+
+            if (lineIndex < lines.length && lines[lineIndex].startsWith("```")) {
+                lineIndex += 1;
+            }
+
+            nodes.push(
+                <pre key={`md-code-${blockIndex++}`} className="mb-3 overflow-x-auto rounded-xl border border-theme bg-theme px-3 py-2 font-mono text-[12px] leading-5 whitespace-pre-wrap">
+                    <code>{codeLines.join("\n")}</code>
+                </pre>,
+            );
+            continue;
+        }
+
+        const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
+        if (headingMatch) {
+            const level = headingMatch[1].length;
+            const HeadingTag = headingTagMap[level as keyof typeof headingTagMap];
+
+            nodes.push(
+                createElement(
+                    HeadingTag,
+                    {
+                        key: `md-heading-${blockIndex++}`,
+                        className: "mb-2 mt-3 font-semibold leading-tight first:mt-0",
+                    },
+                    renderInlineMarkdown(headingMatch[2], `md-heading-${blockIndex}`),
+                ),
+            );
+            lineIndex += 1;
+            continue;
+        }
+
+        if (/^>\s?/.test(line)) {
+            const quoteLines: string[] = [];
+
+            while (lineIndex < lines.length && /^>\s?/.test(lines[lineIndex])) {
+                quoteLines.push(lines[lineIndex].replace(/^>\s?/, ""));
+                lineIndex += 1;
+            }
+
+            nodes.push(
+                <blockquote key={`md-quote-${blockIndex++}`} className="mb-3 border-l-2 border-theme pl-3 text-sm text-muted">
+                    <div className="space-y-1">
+                        {quoteLines.map((quoteLine, quoteIndex) => (
+                            <p key={`md-quote-${blockIndex}-${quoteIndex}`}>{renderInlineMarkdown(quoteLine, `md-quote-${blockIndex}-${quoteIndex}`)}</p>
+                        ))}
+                    </div>
+                </blockquote>,
+            );
+            continue;
+        }
+
+        const listItems: string[] = [];
+        const isListItem = (value: string) => /^([-*+]\s+|\d+\.\s+)/.test(value);
+
+        if (isListItem(line)) {
+            const ordered = /^\d+\.\s+/.test(line);
+            while (lineIndex < lines.length && isListItem(lines[lineIndex])) {
+                listItems.push(lines[lineIndex].replace(/^([-*+]\s+|\d+\.\s+)/, ""));
+                lineIndex += 1;
+            }
+
+            const ListTag = ordered ? "ol" : "ul";
+            nodes.push(
+                <ListTag key={`md-list-${blockIndex++}`} className="mb-3 ml-5 list-inside space-y-1">
+                    {listItems.map((item, itemIndex) => (
+                        <li key={`md-list-${blockIndex}-${itemIndex}`}>{renderInlineMarkdown(item, `md-list-${blockIndex}-${itemIndex}`)}</li>
+                    ))}
+                </ListTag>,
+            );
+            continue;
+        }
+
+        const paragraphLines: string[] = [line];
+        lineIndex += 1;
+
+        while (lineIndex < lines.length) {
+            const nextLine = lines[lineIndex];
+            if (!nextLine.trim() || nextLine.startsWith("```") || /^(#{1,6})\s+/.test(nextLine) || /^>\s?/.test(nextLine) || isListItem(nextLine)) {
+                break;
+            }
+
+            paragraphLines.push(nextLine);
+            lineIndex += 1;
+        }
+
+        nodes.push(
+            <p key={`md-paragraph-${blockIndex++}`} className="mb-3 last:mb-0">
+                {renderInlineMarkdown(paragraphLines.join(" "), `md-paragraph-${blockIndex}`)}
+            </p>,
+        );
+    }
+
+    return nodes;
 }
 
 export function AiTutor({
@@ -154,7 +381,17 @@ export function AiTutor({
     );
 
     useEffect(() => {
-        resetConversation();
+        let cancelled = false;
+
+        queueMicrotask(() => {
+            if (!cancelled) {
+                resetConversation();
+            }
+        });
+
+        return () => {
+            cancelled = true;
+        };
     }, [analysisVersion, resetConversation]);
 
     useEffect(() => {
@@ -217,7 +454,9 @@ export function AiTutor({
                                         <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide opacity-70">
                                             {message.role === "user" ? "Tú" : "Tutor"}
                                         </div>
-                                        <div className="whitespace-pre-wrap">{message.content}</div>
+                                        <div className={message.role === "user" ? "whitespace-pre-wrap" : "space-y-3 text-sm leading-6 [&_a]:break-all"}>
+                                            {message.role === "user" ? message.content : renderMarkdown(message.content)}
+                                        </div>
                                     </div>
                                 </div>
                             ))}
