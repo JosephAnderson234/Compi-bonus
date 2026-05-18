@@ -103,6 +103,34 @@ def show_banner(label: str, result: dict[str, Any]) -> None:
     print(f"  {DIM}Mensaje: {_eps(result['mensaje'])}{RESET}")
 
 
+def show_input(inp: dict[str, Any]) -> None:
+    print(f"\n  {BOLD}Entrada del caso:{RESET}")
+    print(f"  {DIM}Simbolo inicial:{RESET} {inp.get('simbolo_inicial', '')}")
+    print(f"  {DIM}Cadena entrada:{RESET}  {inp['cadena_entrada']!r}")
+    print(f"\n  {BOLD}Gramatica:{RESET}")
+    for line in inp["gramatica"].strip().splitlines():
+        print(f"    {CYAN}{_eps(line.strip())}{RESET}")
+
+
+def show_afn(afn: dict[str, Any]) -> None:
+    estados = afn.get("estados", [])
+    if not estados:
+        return
+    print()
+    print(BOLD + BLUE + f"  ▶  AFN de clausura ({afn.get('tipo', 'LR0')})" + RESET)
+    for st in estados[:6]:
+        print(f"\n  {BOLD}{st['estado']}{RESET}")
+        for it in st.get("items", [])[:8]:
+            print(f"    {DIM}{_eps(it)}{RESET}")
+        if len(st.get("items", [])) > 8:
+            print(f"    {DIM}... ({len(st['items'])} items){RESET}")
+        if st.get("transiciones"):
+            trans = ", ".join(f"{k}→{v}" for k, v in st["transiciones"].items())
+            print(f"    {MAGENTA}{trans}{RESET}")
+    if len(estados) > 6:
+        print(f"\n  {DIM}... ({len(estados)} estados en total){RESET}")
+
+
 def show_lr0_table(tabla: dict[str, Any]) -> None:
     """Muestra la tabla LR(0) unificada (ACTION + GOTO)."""
     columnas: list[str] = tabla["columnas"]   # ["Estado", "id", ...]
@@ -264,6 +292,8 @@ def run_tests() -> None:
     for case in CASES:
         result = run_analysis(case["input"])
         show_banner(case["label"], result)
+        show_input(case["input"])
+        show_afn(result.get("afn_clausura", {}))
         show_lr0_table(result["construccion_tablas"])
         show_conflicts(result)
         show_steps(result["proceso_paso_a_paso"])

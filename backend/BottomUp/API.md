@@ -6,7 +6,7 @@ Parsers **LR** para análisis ascendente. Tres interfaces principales:
 |--------|---------|----------------|
 | `lr0_parser.py` | `run_analysis(input_data)` | LR(0) |
 | `slr1_parser.py` | `run_analysis(input_data)` | SLR(1) |
-| `lr1p.py` | `parse_request(request)` | LR(1) |
+| `lr1_parser.py` | `run_analysis(input_data)` / `parse_request(request)` | LR(1) |
 
 `LR1.py` define la misma clase `ParserLR1` y método `run(tokens)`; `lr1p.py` es el adaptador con entrada tipo concurso (`gramatica`, `simbolo_inicial`, `cadena_entrada`).
 
@@ -60,10 +60,11 @@ Mismas claves que LR0/SLR1, más opcional:
 |-------|------|---------|-------------|
 | `tipo_parser` | `string` | `"LR1"` | Debe ser `"LR1"`; otro valor devuelve `{ "error": "..." }`. |
 
-Parseo vía `Grammar.from_text()` en `LRBase.py`:
+Parseo vía `Grammar.from_text()` en `lr_base.py`:
 
-- Tokens por espacios; **no** se permiten alternativas vacías (línea sin símbolos tras `|` → `ValueError`).
-- Para épsilon en LR(1) usar el token **`eps`** explícito en la alternativa.
+- Tokens por espacios.
+- Épsilon: token **`eps`**, símbolo **`ε`** en texto, o alternativa vacía tras `|` (como LR0).
+- Producción `A -> eps` → cuerpo vacío interno; en JSON/salida se muestra **`eps`**.
 - Se inserta automáticamente la producción aumentada `S' -> simbolo_inicial`.
 
 ```json
@@ -253,6 +254,7 @@ Igual estructura que LR0 (`paso`, `pila`, `entrada`, `accion`). Textos: `Desplaz
 cd backend/test
 python test_lr0.py
 python test_slr1.py
+python test_lr1.py
 ```
 
 ---

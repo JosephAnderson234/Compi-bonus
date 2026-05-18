@@ -432,7 +432,36 @@ class LR0Parser:
                 return False
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 6. ORQUESTACIÓN + SERIALIZACIÓN JSON
+    # 6. SERIALIZACIÓN DEL AFN (colección canónica)
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _item_to_str(self, head: str, body: tuple[str, ...], dot: int) -> str:
+        """Formato LR(0): 'A -> α . β' (cuerpo vacío: 'A -> .')."""
+        if not body:
+            return f"{head} -> ."
+        left = list(body[:dot])
+        right = list(body[dot:])
+        core = " ".join(left + ["."] + right)
+        return f"{head} -> {core}"
+
+    def afn_closure_to_json(self, tipo: str = "LR0") -> dict[str, Any]:
+        estados: list[dict[str, Any]] = []
+        for state_idx, state in enumerate(self.states):
+            trans = self.goto_map.get(state_idx, {})
+            estados.append({
+                "estado": f"I{state_idx}",
+                "items": sorted(
+                    self._item_to_str(h, b, d) for h, b, d in state
+                ),
+                "transiciones": {
+                    sym: f"I{dst}"
+                    for sym, dst in sorted(trans.items())
+                },
+            })
+        return {"tipo": tipo, "estados": estados}
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # 7. ORQUESTACIÓN + SERIALIZACIÓN JSON
     # ──────────────────────────────────────────────────────────────────────────
 
     def analyze(self) -> dict[str, Any]:
@@ -483,6 +512,7 @@ class LR0Parser:
             return {
                 "cadena_valida":        False,
                 "mensaje":              mensaje,
+                "afn_clausura":         self.afn_closure_to_json(),
                 "construccion_tablas":  table_section,
                 "proceso_paso_a_paso":  [],
             }
@@ -498,6 +528,7 @@ class LR0Parser:
         return {
             "cadena_valida":       accepted,
             "mensaje":             mensaje,
+            "afn_clausura":        self.afn_closure_to_json(),
             "construccion_tablas": table_section,
             "proceso_paso_a_paso": self.sim_steps,
         }

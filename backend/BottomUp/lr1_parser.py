@@ -4,15 +4,19 @@ Parser LR1. Importa la infraestructura de lr_base.py.
 """
 
 import json
-import sys
-import os
-sys.path.insert(0, os.path.dirname(__file__))
-
 from collections import defaultdict
-from BottomUp.LRBase import (
-    Grammar, compute_first,
-    LR1Item, LR1State, closure, goto_state,
-    ActionType, Action, LRTable, run_parser
+
+from lr_base import (
+    Grammar,
+    compute_first,
+    LR1Item,
+    LR1State,
+    closure,
+    goto_state,
+    ActionType,
+    Action,
+    LRTable,
+    run_parser,
 )
 
 
@@ -115,6 +119,13 @@ class ParserLR1:
                                    ),
             "proceso_paso_a_paso": parse_result["proceso_paso_a_paso"]
         }
+
+
+def run_analysis(input_data: dict) -> dict:
+    """Misma interfaz que lr0_parser / slr1_parser."""
+    payload = dict(input_data)
+    payload.setdefault("tipo_parser", "LR1")
+    return parse_request(payload)
 
 
 def parse_request(request: dict) -> dict:

@@ -382,6 +382,7 @@ class SLR1Parser(LR0Parser):
             return {
                 "cadena_valida":         False,
                 "mensaje":               mensaje,
+                "afn_clausura":          self.afn_closure_to_json(tipo="SLR1"),
                 "conjuntos_first_follow": ff_section,
                 "construccion_tablas":   table_section,
                 "proceso_paso_a_paso":   [],
@@ -398,6 +399,7 @@ class SLR1Parser(LR0Parser):
         return {
             "cadena_valida":         accepted,
             "mensaje":               mensaje,
+            "afn_clausura":          self.afn_closure_to_json(tipo="SLR1"),
             "conjuntos_first_follow": ff_section,
             "construccion_tablas":   table_section,
             "proceso_paso_a_paso":   self.sim_steps,

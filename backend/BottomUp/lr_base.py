@@ -10,8 +10,21 @@ Clases y funciones compartidas entre LR1 y LALR1.
 
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Optional
 from enum import Enum, auto
+from typing import Optional
+
+# Epsilon: mismo criterio que lr0_parser / TopDown (JSON y logica interna)
+EPS = "eps"
+EPSILON_INPUT = frozenset({"eps", "ε", "epsilon", "EPSILON", "EPS"})
+
+
+def _normalize_symbol(sym: str) -> str:
+    return EPS if sym in EPSILON_INPUT else sym
+
+
+def format_body(transaction: list[str]) -> str:
+    """Representacion textual del cuerpo; produccion vacia -> 'eps'."""
+    return " ".join(transaction) if transaction else EPS
 
 
 # ------------------------------------------------------------------------------
@@ -36,7 +49,7 @@ class Production:
         return self.transaction < other.transaction
 
     def __repr__(self):
-        return f"{self.non_terminal} -> {' '.join(self.transaction)}"
+        return f"{self.non_terminal} -> {format_body(self.transaction)}"
 
 
 # ------------------------------------------------------------------------------
@@ -59,7 +72,7 @@ class Grammar:
             T -> T * F | F
             F -> ( E ) | id
 
-        Cada token separado por espacios. El scanner ya tokenizo.
+        Cada token separado por espacios. Epsilon: token eps, simbolo ε o | vacio.
         Agrega automaticamente la produccion aumentada S' -> simbolo_inicial.
         """
         g = cls()
@@ -72,9 +85,13 @@ class Grammar:
             lhs, rhs = line.split("->", 1)
             lhs = lhs.strip()
             for alt in rhs.split("|"):
-                tokens = alt.strip().split()
-                if not tokens:
-                    raise ValueError(f"Alternativa vacia en: {line!r}")
+                raw = alt.strip().split()
+                if not raw:
+                    tokens: list[str] = []
+                else:
+                    tokens = [_normalize_symbol(t) for t in raw]
+                    if len(tokens) == 1 and tokens[0] == EPS:
+                        tokens = []
                 g.add_production(lhs, tokens)
 
         if simbolo_inicial is None:
@@ -92,7 +109,7 @@ class Grammar:
         result = {"$"}
         for p in self.productions:
             for sym in p.transaction:
-                if sym not in nt:
+                if sym not in nt and sym != EPS:
                     result.add(sym)
         return result
 
@@ -122,14 +139,14 @@ def compute_first(grammar: Grammar) -> dict[str, set[str]]:
             all_eps = True
             for sym in p.transaction:
                 before = len(F)
-                F |= first[sym] - {"e"}
+                F |= first[sym] - {EPS}
                 if len(F) > before:
                     changed = True
-                if "e" not in first[sym]:
+                if EPS not in first[sym]:
                     all_eps = False
                     break
-            if all_eps and "e" not in F:
-                F.add("e")
+            if all_eps and EPS not in F:
+                F.add(EPS)
                 changed = True
 
     return first
@@ -140,12 +157,12 @@ def first_of_sequence(seq: list[str], first_sets: dict[str, set[str]]) -> set[st
     all_eps = True
     for sym in seq:
         fs = first_sets.get(sym, set())
-        result |= fs - {"e"}
-        if "e" not in fs:
+        result |= fs - {EPS}
+        if EPS not in fs:
             all_eps = False
             break
     if all_eps:
-        result.add("e")
+        result.add(EPS)
     return result
 
 
@@ -193,11 +210,16 @@ class LR1Item:
         return sorted(self.lookaheads) < sorted(other.lookaheads)
 
     def to_str(self) -> str:
-        """Formato: "E -> E . + T , $/+" """
-        syms = list(self.production.transaction)
-        syms.insert(self.dot_pos, ".")
+        """Formato: "E -> E . + T , $/+" (cuerpo vacio: "A -> .")"""
+        trans = self.production.transaction
+        if not trans:
+            core = "."
+        else:
+            left = trans[: self.dot_pos]
+            right = trans[self.dot_pos :]
+            core = " ".join(left + ["."] + right)
         la = "/".join(sorted(self.lookaheads))
-        return f"{self.production.non_terminal} -> {' '.join(syms)} , {la}"
+        return f"{self.production.non_terminal} -> {core} , {la}"
 
 
 # ------------------------------------------------------------------------------
@@ -256,7 +278,7 @@ def closure(state: LR1State, grammar: Grammar, first_sets: dict) -> LR1State:
                 for la in item.lookaheads:
                     seq = beta_seq + [la]
                     f = first_of_sequence(seq, first_sets)
-                    new_la |= f - {"e"}
+                    new_la |= f - {EPS}
                 new_item = LR1Item(prod, 0, frozenset(new_la))
                 if state.add_item(new_item):
                     changed = True
@@ -291,13 +313,18 @@ class Action:
     reduce_prod: Optional[Production] = None
 
     def __eq__(self, other):
-        return self.type == other.type and self.value == other.value
+        if self.type != other.type:
+            return False
+        if self.type == ActionType.REDUCE:
+            # Two reduce actions are equal only if they reduce the same production
+            return self.reduce_prod == other.reduce_prod
+        return self.value == other.value
 
     def to_str(self) -> str:
         if self.type == ActionType.SHIFT:
             return f"S{self.value}"
         if self.type == ActionType.REDUCE:
-            body = " ".join(self.reduce_prod.transaction)
+            body = format_body(self.reduce_prod.transaction)
             return f"R({self.reduce_prod.non_terminal} -> {body})"
         if self.type == ActionType.ACCEPT:
             return "ACC"
@@ -413,7 +440,7 @@ def run_parser(tokens: list[str], table: LRTable) -> dict:
 
         elif act.type == ActionType.REDUCE:
             prod = act.reduce_prod
-            body = " ".join(prod.transaction)
+            body = format_body(prod.transaction)
             steps.append({
                 "paso":    paso,
                 "pila":    pila_str,
