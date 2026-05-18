@@ -20,9 +20,17 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from collections import defaultdict, OrderedDict
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
+
+_root = Path(__file__).resolve().parent.parent
+if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
+
+from grammar_symbols import fresh_prime_name, symbols_in_grammar
 
 # ── Constantes globales ────────────────────────────────────────────────────────
 EPSILON = "eps"
@@ -306,6 +314,16 @@ class LL1Parser:
     # 5. MÓDULO DE TRANSFORMACIÓN AUTOMÁTICA
     # ──────────────────────────────────────────────────────────────────────────
 
+    def _used_symbol_names(
+        self, *prod_dicts: dict[str, list[list[str]]]
+    ) -> set[str]:
+        """NTs, terminales y símbolos en cuerpos ya presentes (gramática + borrador)."""
+        used = set(self.non_terminals) | set(self.terminals)
+        used |= symbols_in_grammar(self.productions)
+        for d in prod_dicts:
+            used |= symbols_in_grammar(d)
+        return used
+
     def transform_grammar(self) -> tuple[dict[str, list[list[str]]], list[str]]:
         """
         Aplica, en orden:
@@ -371,10 +389,8 @@ class LL1Parser:
                 new_prods[nt] = alts
                 continue
 
-            # Crear nuevo NT A' (evitar colisiones de nombre)
-            prime = nt + "'"
-            while prime in prods or prime in new_prods:
-                prime += "'"
+            used = self._used_symbol_names(prods, new_prods)
+            prime = fresh_prime_name(nt, used)
 
             # A  → β A'   para cada β no recursivo
             new_alts_A: list[list[str]] = []
@@ -484,10 +500,8 @@ class LL1Parser:
                 suffix = alt[len(prefix):]
                 suffix_alts.append(suffix if suffix else [EPSILON])
 
-            # Nombre para el nuevo NT
-            prime = nt + "'"
-            while prime in existing_prods or prime in extra_prods:
-                prime += "'"
+            used = self._used_symbol_names(existing_prods, extra_prods)
+            prime = fresh_prime_name(nt, used)
 
             new_alts.append(prefix + [prime])
             extra_prods[prime] = suffix_alts

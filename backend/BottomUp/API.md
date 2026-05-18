@@ -83,7 +83,9 @@ En reducciones LR(0)/SLR(1): `Reducir ... por A -> eps`.
 
 ### Gramática aumentada (automática)
 
-Todos los parsers LR crean internamente `S' -> S` (sufijo `'`, p. ej. `E'` si `S = E`). **No** hace falta escribirla en `gramatica`.
+Todos los parsers LR crean internamente una producción `S' -> S` donde `S` es `simbolo_inicial`. **No** hace falta escribirla en `gramatica`.
+
+El nombre del símbolo aumentado se elige como `S'`, `S''`, … (solo comillas repetidas) hasta que no colisione con ningún **no terminal**, **terminal** ni símbolo reservado (`$`, `eps`) ya presente. Ejemplo: si la gramática ya usa el terminal `E'`, el aumentado para `E` será `E''`.
 
 ### Ejemplo de request
 
@@ -367,6 +369,7 @@ python test_lr0.py
 python test_slr1.py
 python test_lr1.py
 python test_lalr1.py
+python test_grammar_symbols.py   # colisiones de nombres
 ```
 
 Los tests usan `import _paths` para añadir `TopDown/` y `BottomUp/` al `sys.path`.
@@ -379,7 +382,7 @@ Los tests usan `import _paths` para añadir `TopDown/` y `BottomUp/` al `sys.pat
 |-----------|--------|
 | Épsilon (JSON) | `eps` |
 | Fin de entrada | `$` |
-| NT aumentado | `{simbolo_inicial}'` |
+| NT aumentado | `{simbolo_inicial}'`, `''`, … (sin colisión) |
 | Formato ítem LR(0) | `NT -> símbolos con .` |
 | Formato ítem LR(1) | `NT -> … , la1/la2` |
 
@@ -388,11 +391,13 @@ Los tests usan `import _paths` para añadir `TopDown/` y `BottomUp/` al `sys.pat
 ## Estructura de archivos
 
 ```
-backend/BottomUp/
-├── lr_base.py       # Grammar, LRTable, run_parser (LR1/LALR1)
-├── lr0_parser.py
-├── slr1_parser.py   # hereda lógica LR(0)
-├── lr1_parser.py
-├── lalr1_parser.py
-└── API.md           # este documento
+backend/
+├── grammar_symbols.py   # fresh_prime_name, symbols_in_grammar (nombres sin colisión)
+└── BottomUp/
+    ├── lr_base.py       # Grammar, LRTable, run_parser (LR1/LALR1)
+    ├── lr0_parser.py
+    ├── slr1_parser.py   # hereda lógica LR(0)
+    ├── lr1_parser.py
+    ├── lalr1_parser.py
+    └── API.md           # este documento
 ```

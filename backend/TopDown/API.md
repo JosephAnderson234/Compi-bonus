@@ -182,6 +182,8 @@ Valores típicos de `accion`:
 | `motivo` | `string` | Causa (conflictos, recursividad izquierda, etc.). |
 | `gramatica_sugerida` | `string \| null` | Gramática transformada (multilínea) o `null`. |
 
+Al eliminar recursividad izquierda o factorizar, los **nuevos no terminales** (`A'`, `A''`, …) se nombran con comillas repetidas hasta evitar colisión con NTs, terminales y símbolos en cuerpos ya existentes (p. ej. si `A'` es terminal, el NT auxiliar será `A''`).
+
 Si `gramatica_parseable === false`: `proceso_paso_a_paso` suele ser `[]`, `cadena_valida === false`, pero **sí** se devuelven `conjuntos_first_follow`, `construccion_tablas` (con conflictos) y `sugerencias_transformacion`.
 
 ### Respuesta LL(1) — gramática válida, cadena aceptada
@@ -363,6 +365,7 @@ function renderNode(n):
 cd backend/test
 python test_ll1.py
 python test_rd.py
+python test_grammar_symbols.py   # colisiones de nombres (opcional, requiere asserts manuales)
 ```
 
 ---
@@ -407,8 +410,10 @@ Ver `backend/BottomUp/API.md` para salida LR (`afn_clausura`, tablas shift-reduc
 ## Estructura de archivos
 
 ```
-backend/TopDown/
-├── ll1_parser.py
-├── dr_parser.py
-└── API.md    # este documento
+backend/
+├── grammar_symbols.py   # fresh_prime_name, symbols_in_grammar (compartido con Bottom-Up)
+└── TopDown/
+    ├── ll1_parser.py
+    ├── dr_parser.py
+    └── API.md    # este documento
 ```

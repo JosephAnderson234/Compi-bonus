@@ -32,8 +32,16 @@ Tupla (head: str,  body: tuple[str, ...],  dot: int)
 from __future__ import annotations
 
 import json
+import sys
 from collections import OrderedDict
+from pathlib import Path
 from typing import Any
+
+_root = Path(__file__).resolve().parent.parent
+if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
+
+from grammar_symbols import fresh_prime_name, symbols_in_grammar
 
 # ── Constantes ────────────────────────────────────────────────────────────────
 EPS          = "eps"           # épsilon en esta aplicación
@@ -136,15 +144,12 @@ class LR0Parser:
         Crea la gramática aumentada: S' -> S  (S' nuevo símbolo).
         Guarda todas las producciones en self.aug_productions y self.prod_list.
         """
-        # Elegir el nombre del símbolo aumentado evitando colisiones
-        aug = self.start_symbol + AUG_SUFFIX
-        while aug in self.productions:
-            aug += AUG_SUFFIX
-        self.aug_start = aug
+        used = symbols_in_grammar(self.productions, set(self.terminals))
+        self.aug_start = fresh_prime_name(self.start_symbol, used)
 
         # Gramática aumentada: primero la regla nueva, luego el resto
         self.aug_productions = OrderedDict()
-        self.aug_productions[aug] = [(self.start_symbol,)]
+        self.aug_productions[self.aug_start] = [(self.start_symbol,)]
         for nt, alts in self.productions.items():
             self.aug_productions[nt] = list(alts)
 
