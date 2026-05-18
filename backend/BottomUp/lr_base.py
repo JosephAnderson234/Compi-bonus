@@ -8,10 +8,18 @@ Clases y funciones compartidas entre LR1 y LALR1.
   - ActionType, Action, LRTable
 """
 
+import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum, auto
+from pathlib import Path
 from typing import Optional
+
+_root = Path(__file__).resolve().parent.parent
+if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
+
+from grammar_symbols import fresh_prime_name, symbols_in_lr_productions
 
 # Epsilon: mismo criterio que lr0_parser / TopDown (JSON y logica interna)
 EPS = "eps"
@@ -97,8 +105,9 @@ class Grammar:
         if simbolo_inicial is None:
             simbolo_inicial = g.productions[0].non_terminal if g.productions else "S"
         g.simbolo_inicial = simbolo_inicial
-        augmented = Production(simbolo_inicial + "'", [simbolo_inicial])
-        g.productions.insert(0, augmented)
+        used = symbols_in_lr_productions(g.productions)
+        aug_name = fresh_prime_name(simbolo_inicial, used)
+        g.productions.insert(0, Production(aug_name, [simbolo_inicial]))
         return g
 
     def non_terminals(self) -> set[str]:
