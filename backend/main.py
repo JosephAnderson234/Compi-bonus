@@ -1,2 +1,8 @@
-# esta linea agrega el directorio actual
-sys.path.insert(0, os.path.dirname(__file__))
+"""Compatibility entry point for local development.
+
+Vercel uses api/index.py, but keeping this file allows local imports such as
+uvicorn main:app from the backend directory.
+"""
+
+from app.main import app
+
